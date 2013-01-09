@@ -21,6 +21,11 @@ using namespace std;
 class Simulator {
     int gSizeX, gSizeY, gSizeZ, gSizeY_2, gSizeZ_2, gSize;
     Vector4i cmul;
+    Vector4f dxSub[8];
+    Vector4f lowBound;
+    Vector4f highBound;
+    Vector4f lowBoundS;
+    Vector4f highBoundS;
 public:
     vector<Particle> particles;
     Node *grid;
@@ -39,12 +44,24 @@ public:
         for (int i = 0; i < gSize; i++) {
             grid[i] = Node();
         }
+        for (int x = 0; x < 2; x++) {
+            for (int y = 0; y < 2; y++) {
+                for (int z = 0; z < 2; z++) {
+                    dxSub[x*4+y*2+z] = Vector4f(x, y, z, 0);
+                }
+            }
+        }
+        
+        lowBound = Vector4f(1.0f, 1.0f, 1.0f, 0.0f);
+        highBound = Vector4f(gSizeX-2, gSizeY-2, gSizeZ-2, 0);
+        lowBoundS = Vector4f(3.0f, 3.0f, 3.0f, 0.0f);
+        highBoundS = Vector4f(gSizeX-4, gSizeY-4, gSizeZ-4, 0);
     }
     
     void AddParticle(float x, float y, float z) {
-        for (int i = 0; i < 125; i++) {
-            for (int j = 0; j < 40; j++) {
-                for (int k = 0; k < 20; k++) {
+        for (int i = 0; i < 250; i++) {
+            for (int j = 0; j < 80; j++) {
+                for (int k = 0; k < 40; k++) {
                     particles.push_back(Particle(x+i*.5, y+j*.5, z+k*.5));
                 }
             }
@@ -59,6 +76,7 @@ public:
                 n.m = 0;
                 n.u.setZero();
                 n.a.setZero();
+                n.gx.setZero();
             }
         }
         
@@ -90,18 +108,20 @@ public:
             w[1][2] = -1;
             
             Vector4f *phiPtr = &p.phi[0];
+            float *wPtr = &p.w[0];
             Node *nodePtr = &grid[p.c];
             for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
                 for (int y = 0; y < 2; y++, nodePtr += gSizeZ_2) {
-                    for (int z = 0; z < 2; z++, phiPtr++, nodePtr++) {
+                    for (int z = 0; z < 2; z++, phiPtr++, wPtr++, nodePtr++) {
                         Vector4f &phi = *phiPtr = u[x].cwiseProduct(v[y].cwiseProduct(w[z]));
                         Node &n = *nodePtr;
                         
-                        float ws = phi.w();
-                        Vector4f w = Vector4f::Constant(ws);
+                        float &ws = *wPtr = phi.w();
+                        phi.w() = 0;
+                        
                         n.m += ws;
-                        n.u += w.cwiseProduct(p.u);
-                        n.a += phi*.01f;
+                        n.u += ws*p.u;
+                        n.gx += phi;
                     }
                 }
             }
@@ -110,11 +130,72 @@ public:
         for (int i = 0; i < gSize; i++) {
             Node &n = grid[i];
             if (n.m > 0) {
-                n.mdiv = Vector4f::Constant(1/n.m);
-                n.mdiv[3] = 0;
-                n.u = n.u.cwiseProduct(n.mdiv);
-                n.a = n.a.cwiseProduct(n.mdiv);
+                n.u /= n.m;
+            }
+        }
+        
+        for (int i = 0; i < particles.size(); i++) {
+            Particle &p = particles[i];
+            
+            Vector4f dx = p.x-p.x.cast<int>().cast<float>();
+            
+            float density = 0;
+            
+            Vector4f *phiPtr = &p.phi[0];
+            float *wPtr = &p.w[0];
+            Node *nodePtr = &grid[p.c];
+            Vector4f *dxPtr = &dxSub[0];
+            for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
+                for (int y = 0; y < 2; y++, nodePtr += gSizeZ_2) {
+                    for (int z = 0; z < 2; z++, phiPtr++, wPtr++, nodePtr++, dxPtr++) {
+                        Vector4f &phi = *phiPtr;
+                        Node &n = *nodePtr;
+                        
+                        density += *wPtr * (n.m+n.gx.dot(dx - *dxPtr));
+                    }
+                }
+            }
+            
+            float pressure = .125*(density-4);
+            
+            if (pressure > .5) {
+                pressure = .5;
+            }
+            
+            Vector4f wallforce = Vector4f::Zero();
+            
+            auto comparisonl = (p.x.array() < lowBoundS.array());
+            if (comparisonl.any()) {
+                Vector4f compMul = comparisonl.cast<float>();
+                wallforce += compMul.cwiseProduct(lowBoundS-p.x);
+            }
+            auto comparisonh = (p.x.array() > highBoundS.array());
+            if (comparisonh.any()) {
+                Vector4f compMul = comparisonh.cast<float>();
+                wallforce += compMul.cwiseProduct(highBoundS-p.x);
+            }
+            
+            phiPtr = &p.phi[0];
+            wPtr = &p.w[0];
+            nodePtr = &grid[p.c];
+            for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
+                for (int y = 0; y < 2; y++, nodePtr += gSizeZ_2) {
+                    for (int z = 0; z < 2; z++, phiPtr++, wPtr++, nodePtr++) {
+                        Vector4f &phi = *phiPtr;
+                        Node &n = *nodePtr;
+                        
+                        n.a -= phi*pressure - *wPtr*wallforce;
+                    }
+                }
+            }
+        }
+        
+        for (int i = 0; i < gSize; i++) {
+            Node &n = grid[i];
+            if (n.m > 0) {
+                n.a /= n.m;
                 n.u += n.a;
+                n.u[1] += .05;
             }
         }
         
@@ -122,22 +203,42 @@ public:
             Particle &p = particles[i];
             
             Vector4f gu = Vector4f::Zero();
+            Vector4f ga = Vector4f::Zero();
+            float density = 0;
             
             Vector4f *phiPtr = &p.phi[0];
+            float *wPtr = &p.w[0];
             Node *nodePtr = &grid[p.c];
             for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
                 for (int y = 0; y < 2; y++, nodePtr += gSizeZ_2) {
-                    for (int z = 0; z < 2; z++, phiPtr++, nodePtr++) {
+                    for (int z = 0; z < 2; z++, phiPtr++, wPtr++, nodePtr++) {
                         Vector4f &phi = *phiPtr;
                         Node &n = *nodePtr;
                         
-                        Vector4f w = Vector4f::Constant(phi.w());
-                        gu += w.cwiseProduct(n.u);
+                        gu += *wPtr * n.u;
+                        ga += *wPtr * n.a;
+                        density += *wPtr * n.m;
                     }
                 }
             }
             
             p.x += gu;
+            p.u += ga;
+            p.u += .2*(gu-p.u);
+            p.density = density;
+            
+            auto comparisonl = (p.x.array() < lowBound.array());
+            if (comparisonl.any()) {
+                Vector4f compMul = comparisonl.cast<float>();
+                p.x += compMul.cwiseProduct(lowBound-p.x+.001f*Vector4f::Random());
+                p.u -= compMul.cwiseProduct(p.u);
+            }
+            auto comparisonh = (p.x.array() > highBound.array());
+            if (comparisonh.any()) {
+                Vector4f compMul = comparisonh.cast<float>();
+                p.x += compMul.cwiseProduct(highBound-p.x-.001f*Vector4f::Random());
+                p.u -= compMul.cwiseProduct(p.u);
+            }
         }
     }
 };

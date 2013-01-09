@@ -2,7 +2,7 @@
 
 //--------------------------------------------------------------
 void testApp::setup(){
-    simulator = Simulator(125, 40, 20);
+    simulator = Simulator(250, 80, 40);
     simulator.AddParticle(5.5, 5.5, 5.5);
 }
 
@@ -13,13 +13,15 @@ void testApp::update(){
 
 //--------------------------------------------------------------
 void testApp::draw(){
-    ofScale(10, 10);
+    ofScale(5, 5);
     
     glBegin(GL_POINTS);
     for (int i = 0; i < simulator.particles.size(); i++) {
         Particle& p = simulator.particles[i];
         //ofCircle(p.x[0], p.x[1], .5);
-        glVertex2f(p.x[1], p.x[2]);
+        float z = p.x[2]/20;
+        glColor3f(z,z,z);
+        glVertex2f(p.x[0], p.x[1]);
     }
     glEnd();
 }

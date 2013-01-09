@@ -12,12 +12,12 @@
 using namespace Eigen;
 
 struct Node {
-    Vector4f u, mdiv, a;
+    Vector4f u, a, gx;
     float m;
     Node() {
         u.setZero();
         a.setZero();
-        mdiv.setZero();
+        gx.setZero();
         m = 0;
     }
 };
