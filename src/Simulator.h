@@ -11,12 +11,16 @@
 
 #include <Eigen>
 #include <vector>
+#include <tbb/tbb.h>
 
 #include "Particle.h"
 #include "Node.h"
 
 using namespace Eigen;
 using namespace std;
+using namespace tbb;
+
+
 
 class Simulator {
     int gSizeX, gSizeY, gSizeZ, gSizeY_2, gSizeZ_2, gSize;
@@ -30,6 +34,7 @@ class Simulator {
 public:
     vector<Particle> particles;
     Node *grid;
+    vector<Node*> active;
     
     Simulator() {}
     
@@ -58,29 +63,103 @@ public:
         lowBoundS = Vector4f(3.0f, 3.0f, 3.0f, 0.0f);
         highBoundS = Vector4f(gSizeX-4, gSizeY-4, gSizeZ-4, 0);
         
-        gravity = Vector4f(0, .05f, 0, 0);
+        gravity = Vector4f(0, .01f, 0, 0);
     }
     
     void AddParticle(float x, float y, float z) {
-        for (int i = 0; i < 125; i++) {
-            for (int j = 0; j < 40; j++) {
-                for (int k = 0; k < 20; k++) {
-                    particles.push_back(Particle(x+i*.5, y+j*.5, z+k*.5));
+        for (int l = 0; l < 10; l++) {
+        for (int i = 0; i < 100; i++) {
+            for (int j = 0; j < 180; j++) {
+                for (int k = 0; k < 2; k++) {
+                    particles.push_back(Particle(x+i*.5, y+j*.5, z+k*.5+l*10));
                 }
             }
         }
-        
+        }
     }
     
-    void Update() {
-        for (int i = 0; i < gSize; i++) {
-            Node &n = grid[i];
-            if (n.m > 0) {
+    class ClearGrid {
+        vector<Node*> &active;
+    public:
+        void operator()(const blocked_range<int>& r) const {
+            for (int i = r.begin(); i != r.end(); i++) {
+                Node &n = *active[i];
                 n.m = 0;
                 n.a.setZero();
                 n.gx.setZero();
             }
         }
+        ClearGrid(vector<Node*> &active) : active(active) {}
+    };
+    
+    class AdvanceParticles {
+        Node *grid;
+        vector<Particle> &particles;
+        Vector4f lowBound;
+        Vector4f highBound;
+        int gSizeY_2, gSizeZ_2;
+    public:
+        void operator()(const blocked_range<int>& r) const {
+            for (int i = r.begin(); i != r.end(); i++) {
+                Particle &p = particles[i];
+                
+                Vector4f gu = Vector4f::Zero();
+                Matrix4f L = Matrix4f::Zero();
+                
+                Vector4f *phiPtr = &p.phi[0];
+                float *wPtr = &p.w[0];
+                Node *nodePtr = &grid[p.c];
+                for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
+                    for (int y = 0; y < 2; y++, nodePtr += gSizeZ_2) {
+                        for (int z = 0; z < 2; z++, phiPtr++, wPtr++, nodePtr++) {
+                            Vector4f &phi = *phiPtr;
+                            Node &n = *nodePtr;
+                            
+                            gu += *wPtr * n.u;
+                            
+                            L += phi*n.u.transpose();
+                        }
+                    }
+                }
+                
+                Matrix4f LT = L.transpose();
+                //Matrix4f W = (L-LT)*.5f;
+                
+                p.stress = (L+LT)*.5f;
+                //p.strain += p.stress + p.strain*W - W*p.strain;
+                p.strain += p.stress;
+                float norm = p.strain.squaredNorm();
+                if (norm > 9) {
+                    norm = sqrtf(norm);
+                    p.strain -= .5*(norm-3)/norm*p.strain;
+                }
+                
+                p.x += gu;
+                p.u += 1*(gu-p.u);
+                
+                auto comparisonl = (p.x.array() < lowBound.array());
+                if (comparisonl.any()) {
+                    Vector4f compMul = comparisonl.cast<float>();
+                    p.x += compMul.cwiseProduct(lowBound-p.x+.001f*Vector4f::Random());
+                    p.u -= compMul.cwiseProduct(p.u);
+                }
+                auto comparisonh = (p.x.array() > highBound.array());
+                if (comparisonh.any()) {
+                    Vector4f compMul = comparisonh.cast<float>();
+                    p.x += compMul.cwiseProduct(highBound-p.x-.001f*Vector4f::Random());
+                    p.u -= compMul.cwiseProduct(p.u);
+                }
+            }
+        }
+        AdvanceParticles(Node* grid, vector<Particle> &particles, int gSizeY_2, int gSizeZ_2, Vector4f lowBound, Vector4f highBound) : grid(grid), particles(particles), gSizeY_2(gSizeY_2), gSizeZ_2(gSizeZ_2), lowBound(lowBound), highBound(highBound) {}
+    };
+    
+    void Update() {
+        
+        
+        parallel_for(blocked_range<int>(0, active.size()), ClearGrid(active));
+
+        active.clear();
         
         Vector4f u[2], v[2], w[2], splat;
         for (int i = 0; i < particles.size(); i++) {
@@ -136,6 +215,8 @@ public:
             float *wPtr = &p.w[0];
             Node *nodePtr = &grid[p.c];
             Vector4f *dxPtr = &dxSub[0];
+            
+            Vector4f normal = Vector4f::Zero();
             for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
                 for (int y = 0; y < 2; y++, nodePtr += gSizeZ_2) {
                     for (int z = 0; z < 2; z++, phiPtr++, wPtr++, nodePtr++, dxPtr++) {
@@ -143,9 +224,13 @@ public:
                         Node &n = *nodePtr;
                         
                         density += *wPtr * (n.m+n.gx.dot(p.dx - *dxPtr));
+                        normal += *wPtr * n.gx;
                     }
                 }
             }
+            
+            normal.normalize();
+            p.normal = normal;
             
             float pressure = .125*(density-8);
             
@@ -155,12 +240,12 @@ public:
             
             Vector4f wallforce = Vector4f::Zero();
             
-            auto comparisonl = (p.x.array() < lowBoundS.array());
+            const CwiseBinaryOp<less<float>, const ArrayWrapper<Vector4f>, const ArrayWrapper<Vector4f> > comparisonl = (p.x.array() < lowBoundS.array());
             if (comparisonl.any()) {
                 Vector4f compMul = comparisonl.cast<float>();
                 wallforce += compMul.cwiseProduct(lowBoundS-p.x);
             }
-            auto comparisonh = (p.x.array() > highBoundS.array());
+            const CwiseBinaryOp<greater<float>, const ArrayWrapper<Vector4f>, const ArrayWrapper<Vector4f> > comparisonh = (p.x.array() > highBoundS.array());
             if (comparisonh.any()) {
                 Vector4f compMul = comparisonh.cast<float>();
                 wallforce += compMul.cwiseProduct(highBoundS-p.x);
@@ -176,8 +261,8 @@ public:
                         Node &n = *nodePtr;
                         
                         n.a -= phi*pressure - *wPtr*wallforce;
-                        Vector4f F = p.strain.transpose()*phi;
-                        n.a -= .1*F;
+                        Vector4f F = (p.strain)*phi;
+                        n.a -= .5*(p.strain)*phi;
                     }
                 }
             }
@@ -188,6 +273,8 @@ public:
             if (n.m > 0) {
                 n.a = n.a/n.m + gravity;
                 n.u.setZero();
+                
+                active.push_back(&n);
             }
         }
         
@@ -223,13 +310,15 @@ public:
             }
         }
         
-        for (int i = 0; i < gSize; i++) {
-            Node &n = grid[i];
+        for (int i = 0; i < active.size(); i++) {
+            Node &n = *active[i];
             if (n.m > 0) {
                 n.u /= n.m;
             }
         }
         
+        parallel_for(blocked_range<int>(0, particles.size()), AdvanceParticles(grid, particles, gSizeY_2, gSizeZ_2, lowBound, highBound));
+        /*
         for (int i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
             
@@ -253,10 +342,11 @@ public:
             }
             
             Matrix4f LT = L.transpose();
-            Matrix4f W = (L-LT)*.5f;
+            //Matrix4f W = (L-LT)*.5f;
             
             p.stress = (L+LT)*.5f;
-            p.strain += p.stress + p.strain*W - W*p.strain;
+            //p.strain += p.stress + p.strain*W - W*p.strain;
+            p.strain += p.stress;
             float norm = p.strain.squaredNorm();
             if (norm > 9) {
                 norm = sqrtf(norm);
@@ -266,19 +356,19 @@ public:
             p.x += gu;
             p.u += 1*(gu-p.u);
             
-            auto comparisonl = (p.x.array() < lowBound.array());
+            const CwiseBinaryOp<less<float>, const ArrayWrapper<Vector4f>, const ArrayWrapper<Vector4f> > comparisonl = (p.x.array() < lowBound.array());
             if (comparisonl.any()) {
                 Vector4f compMul = comparisonl.cast<float>();
                 p.x += compMul.cwiseProduct(lowBound-p.x+.001f*Vector4f::Random());
                 p.u -= compMul.cwiseProduct(p.u);
             }
-            auto comparisonh = (p.x.array() > highBound.array());
+            const CwiseBinaryOp<greater<float>, const ArrayWrapper<Vector4f>, const ArrayWrapper<Vector4f> > comparisonh = (p.x.array() > highBound.array());
             if (comparisonh.any()) {
                 Vector4f compMul = comparisonh.cast<float>();
                 p.x += compMul.cwiseProduct(highBound-p.x-.001f*Vector4f::Random());
                 p.u -= compMul.cwiseProduct(p.u);
             }
-        }
+        }*/
     }
 };
 
