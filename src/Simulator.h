@@ -59,9 +59,9 @@ public:
     }
     
     void AddParticle(float x, float y, float z) {
-        for (int i = 0; i < 250; i++) {
-            for (int j = 0; j < 80; j++) {
-                for (int k = 0; k < 40; k++) {
+        for (int i = 0; i < 125; i++) {
+            for (int j = 0; j < 40; j++) {
+                for (int k = 0; k < 1; k++) {
                     particles.push_back(Particle(x+i*.5, y+j*.5, z+k*.5));
                 }
             }
@@ -89,16 +89,15 @@ public:
             // calculate 1d index of cell
             p.c = cx.dot(cmul);
             
-            Vector4f dx = p.x-cx.cast<float>();
-            float *dxData = dx.data();
+            p.dx = p.x-cx.cast<float>();
+            float *dxData = p.dx.data();
             
-            Vector4f one = Vector4f::Ones();
             u[1] = splat = Vector4f::Constant(dxData[0]);
-            u[0] = one-splat;
+            u[0] = Vector4f::Ones()-splat;
             v[1] = splat = Vector4f::Constant(dxData[1]);
-            v[0] = one-splat;
+            v[0] = Vector4f::Ones()-splat;
             w[1] = splat = Vector4f::Constant(dxData[2]);
-            w[0] = one-splat;
+            w[0] = Vector4f::Ones()-splat;
             
             u[0][0] = 1;
             u[1][0] = -1;
@@ -137,8 +136,6 @@ public:
         for (int i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
             
-            Vector4f dx = p.x-p.x.cast<int>().cast<float>();
-            
             float density = 0;
             
             Vector4f *phiPtr = &p.phi[0];
@@ -151,7 +148,7 @@ public:
                         Vector4f &phi = *phiPtr;
                         Node &n = *nodePtr;
                         
-                        density += *wPtr * (n.m+n.gx.dot(dx - *dxPtr));
+                        density += *wPtr * (n.m+n.gx.dot(p.dx - *dxPtr));
                     }
                 }
             }
@@ -185,6 +182,8 @@ public:
                         Node &n = *nodePtr;
                         
                         n.a -= phi*pressure - *wPtr*wallforce;
+                        //Vector4f F = p.stress.transpose()*phi;
+                        //n.a += .01*F;
                     }
                 }
             }
@@ -194,8 +193,8 @@ public:
             Node &n = grid[i];
             if (n.m > 0) {
                 n.a /= n.m;
+                n.a[1] += .01;
                 n.u += n.a;
-                n.u[1] += .05;
             }
         }
         
@@ -204,7 +203,7 @@ public:
             
             Vector4f gu = Vector4f::Zero();
             Vector4f ga = Vector4f::Zero();
-            float density = 0;
+            Matrix4f L = Matrix4f::Zero();
             
             Vector4f *phiPtr = &p.phi[0];
             float *wPtr = &p.w[0];
@@ -217,15 +216,21 @@ public:
                         
                         gu += *wPtr * n.u;
                         ga += *wPtr * n.a;
-                        density += *wPtr * n.m;
+                        
+                        L += phi*n.u.transpose();
                     }
                 }
             }
             
+            Matrix4f LT = L.transpose();
+            Matrix4f W = (L-LT)*.5f;
+            
+            p.stress = L;
+            p.strain += p.stress + p.strain*W - W*p.strain;
+            
             p.x += gu;
             p.u += ga;
-            p.u += .2*(gu-p.u);
-            p.density = density;
+            p.u += .1*(gu-p.u);
             
             auto comparisonl = (p.x.array() < lowBound.array());
             if (comparisonl.any()) {
