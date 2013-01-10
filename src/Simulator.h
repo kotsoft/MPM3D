@@ -26,6 +26,7 @@ class Simulator {
     Vector4f highBound;
     Vector4f lowBoundS;
     Vector4f highBoundS;
+    Vector4f gravity;
 public:
     vector<Particle> particles;
     Node *grid;
@@ -56,12 +57,14 @@ public:
         highBound = Vector4f(gSizeX-2, gSizeY-2, gSizeZ-2, 0);
         lowBoundS = Vector4f(3.0f, 3.0f, 3.0f, 0.0f);
         highBoundS = Vector4f(gSizeX-4, gSizeY-4, gSizeZ-4, 0);
+        
+        gravity = Vector4f(0, .05f, 0, 0);
     }
     
     void AddParticle(float x, float y, float z) {
         for (int i = 0; i < 125; i++) {
             for (int j = 0; j < 40; j++) {
-                for (int k = 0; k < 1; k++) {
+                for (int k = 0; k < 20; k++) {
                     particles.push_back(Particle(x+i*.5, y+j*.5, z+k*.5));
                 }
             }
@@ -74,7 +77,6 @@ public:
             Node &n = grid[i];
             if (n.m > 0) {
                 n.m = 0;
-                n.u.setZero();
                 n.a.setZero();
                 n.gx.setZero();
             }
@@ -119,17 +121,9 @@ public:
                         phi.w() = 0;
                         
                         n.m += ws;
-                        n.u += ws*p.u;
                         n.gx += phi;
                     }
                 }
-            }
-        }
-        
-        for (int i = 0; i < gSize; i++) {
-            Node &n = grid[i];
-            if (n.m > 0) {
-                n.u /= n.m;
             }
         }
         
@@ -153,7 +147,7 @@ public:
                 }
             }
             
-            float pressure = .125*(density-4);
+            float pressure = .125*(density-8);
             
             if (pressure > .5) {
                 pressure = .5;
@@ -182,8 +176,8 @@ public:
                         Node &n = *nodePtr;
                         
                         n.a -= phi*pressure - *wPtr*wallforce;
-                        //Vector4f F = p.stress.transpose()*phi;
-                        //n.a += .01*F;
+                        Vector4f F = p.strain.transpose()*phi;
+                        n.a -= .1*F;
                     }
                 }
             }
@@ -192,9 +186,47 @@ public:
         for (int i = 0; i < gSize; i++) {
             Node &n = grid[i];
             if (n.m > 0) {
-                n.a /= n.m;
-                n.a[1] += .01;
-                n.u += n.a;
+                n.a = n.a/n.m + gravity;
+                n.u.setZero();
+            }
+        }
+        
+        for (int i = 0; i < particles.size(); i++) {
+            Particle &p = particles[i];
+            
+            Vector4f ga = Vector4f::Zero();
+            
+            float *wPtr = &p.w[0];
+            Node *nodePtr = &grid[p.c];
+            for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
+                for (int y = 0; y < 2; y++, nodePtr += gSizeZ_2) {
+                    for (int z = 0; z < 2; z++, wPtr++, nodePtr++) {
+                        Node &n = *nodePtr;
+                        
+                        ga += *wPtr * n.a;
+                    }
+                }
+            }
+
+            p.u += ga;
+            
+            wPtr = &p.w[0];
+            nodePtr = &grid[p.c];
+            for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
+                for (int y = 0; y < 2; y++, nodePtr += gSizeZ_2) {
+                    for (int z = 0; z < 2; z++, wPtr++, nodePtr++) {
+                        Node &n = *nodePtr;
+                        
+                        n.u += *wPtr * p.u;
+                    }
+                }
+            }
+        }
+        
+        for (int i = 0; i < gSize; i++) {
+            Node &n = grid[i];
+            if (n.m > 0) {
+                n.u /= n.m;
             }
         }
         
@@ -202,7 +234,6 @@ public:
             Particle &p = particles[i];
             
             Vector4f gu = Vector4f::Zero();
-            Vector4f ga = Vector4f::Zero();
             Matrix4f L = Matrix4f::Zero();
             
             Vector4f *phiPtr = &p.phi[0];
@@ -215,7 +246,6 @@ public:
                         Node &n = *nodePtr;
                         
                         gu += *wPtr * n.u;
-                        ga += *wPtr * n.a;
                         
                         L += phi*n.u.transpose();
                     }
@@ -225,12 +255,16 @@ public:
             Matrix4f LT = L.transpose();
             Matrix4f W = (L-LT)*.5f;
             
-            p.stress = L;
+            p.stress = (L+LT)*.5f;
             p.strain += p.stress + p.strain*W - W*p.strain;
+            float norm = p.strain.squaredNorm();
+            if (norm > 9) {
+                norm = sqrtf(norm);
+                p.strain -= .5*(norm-3)/norm*p.strain;
+            }
             
             p.x += gu;
-            p.u += ga;
-            p.u += .1*(gu-p.u);
+            p.u += 1*(gu-p.u);
             
             auto comparisonl = (p.x.array() < lowBound.array());
             if (comparisonl.any()) {

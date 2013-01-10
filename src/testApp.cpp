@@ -24,11 +24,14 @@ void testApp::draw(){
         float v = fminf(1, p.u.norm()*1.5);
         glColor3f(v,.6+v*.4,1);
         float *x = p.x.data();
-        float *x2 = Vector4f(p.x-p.stress.col(2)).data();
+        float *x2 = Vector4f(p.x-p.u).data();
         glVertex3f(x[0], x[1], x[2]/20);
         glVertex3f(x2[0], x2[1], x2[2]/20);
     }
     glEnd();
+    
+    ofColor(255);
+    ofDrawBitmapString(ofToString(ofGetFrameRate()), 10, 10);
 }
 
 //--------------------------------------------------------------
