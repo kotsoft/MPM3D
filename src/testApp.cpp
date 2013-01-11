@@ -2,7 +2,7 @@
 
 //--------------------------------------------------------------
 void testApp::setup(){
-    simulator = Simulator(23, 90, 200);
+    simulator = Simulator(23, 40, 125);
     simulator.AddParticle(5.5, 5.5, 5.5);
     
     glEnable(GL_DEPTH_TEST);
@@ -24,7 +24,6 @@ void testApp::draw(){
         float v = fminf(1, p.u.norm()*1.5);
         glColor3f(v, .6+.4*v, 1);
         float *x = p.x.data();
-        float *x2 = Vector4f(p.x-p.u).data();
         glVertex3f(x[2], x[1], x[0]/60);
         //glVertex3f(x2[2], x2[1], x2[0]/20);
     }

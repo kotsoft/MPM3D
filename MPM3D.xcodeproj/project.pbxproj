@@ -7,10 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		9B621289169F75D5000725AE /* libtbb.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 9B621287169F75D5000725AE /* libtbb.dylib */; };
-		9B62128A169F75D5000725AE /* libtbbmalloc.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 9B621288169F75D5000725AE /* libtbbmalloc.dylib */; };
-		9B62128B169F764E000725AE /* libtbb.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = 9B621287169F75D5000725AE /* libtbb.dylib */; };
-		9B62128C169F764E000725AE /* libtbbmalloc.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = 9B621288169F75D5000725AE /* libtbbmalloc.dylib */; };
 		BBAB23CB13894F3D00AA2426 /* GLUT.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = BBAB23BE13894E4700AA2426 /* GLUT.framework */; };
 		E4328149138ABC9F0047C5CB /* openFrameworksDebug.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E4328148138ABC890047C5CB /* openFrameworksDebug.a */; };
 		E45BE97B0E8CC7DD009D7055 /* AGL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E45BE9710E8CC7DD009D7055 /* AGL.framework */; };
@@ -57,8 +53,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 16;
 			files = (
-				9B62128B169F764E000725AE /* libtbb.dylib in CopyFiles */,
-				9B62128C169F764E000725AE /* libtbbmalloc.dylib in CopyFiles */,
 				BBAB23CB13894F3D00AA2426 /* GLUT.framework in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -66,8 +60,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		9B621287169F75D5000725AE /* libtbb.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libtbb.dylib; path = ../../../../tbb/lib/libtbb.dylib; sourceTree = "<group>"; };
-		9B621288169F75D5000725AE /* libtbbmalloc.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libtbbmalloc.dylib; path = ../../../../tbb/lib/libtbbmalloc.dylib; sourceTree = "<group>"; };
 		9B654E71169FAB0A00474FD6 /* Region.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Region.h; sourceTree = "<group>"; };
 		9BE1768F16985ED00075AD80 /* Particle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Particle.h; sourceTree = "<group>"; };
 		9BE1769016985F1D0075AD80 /* Simulator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Simulator.h; sourceTree = "<group>"; };
@@ -103,8 +95,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9B621289169F75D5000725AE /* libtbb.dylib in Frameworks */,
-				9B62128A169F75D5000725AE /* libtbbmalloc.dylib in Frameworks */,
 				E7F985F815E0DEA3003869B5 /* Accelerate.framework in Frameworks */,
 				E7E077E815D3B6510020DFD4 /* QTKit.framework in Frameworks */,
 				E4EB6799138ADC1D00A09F29 /* GLUT.framework in Frameworks */,
@@ -185,8 +175,6 @@
 		E4B69B4A0A3A1720003C02F2 = {
 			isa = PBXGroup;
 			children = (
-				9B621287169F75D5000725AE /* libtbb.dylib */,
-				9B621288169F75D5000725AE /* libtbbmalloc.dylib */,
 				E4B6FCAD0C3E899E008CF71C /* openFrameworks-Info.plist */,
 				E4EB6923138AFD0F00A09F29 /* Project.xcconfig */,
 				E4B69E1C0A3A1BDC003C02F2 /* src */,
@@ -354,7 +342,6 @@
 				HEADER_SEARCH_PATHS = (
 					"$(OF_CORE_HEADERS)",
 					../../../../eigen/Eigen,
-					../../../../tbb/include,
 				);
 				LLVM_LTO = YES;
 				ONLY_ACTIVE_ARCH = NO;
@@ -399,7 +386,6 @@
 				HEADER_SEARCH_PATHS = (
 					"$(OF_CORE_HEADERS)",
 					../../../../eigen/Eigen,
-					../../../../tbb/include,
 				);
 				LLVM_LTO = YES;
 				ONLY_ACTIVE_ARCH = NO;
