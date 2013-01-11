@@ -15,13 +15,14 @@
 #include "Particle.h"
 #include "Node.h"
 #include "Region.h"
+#include "GridWorker.h"
 #include <Poco/ThreadPool.h>
 
 using namespace Eigen;
 using namespace std;
 using namespace Poco;
 
-class Simulator {
+class Simulator : public ofThread {
     int gSizeX, gSizeY, gSizeZ, gSizeY_2, gSizeZ_2, gSize;
     Vector4i cmul;
     Vector4f dxSub[8];
@@ -36,6 +37,10 @@ public:
     vector<Particle> particles;
     static const int nRegions = 16;
     Region *regions[nRegions];
+    
+    static const int nGWorkers = 8;
+    GridWorker *gridWorkers[nGWorkers];
+    
     //Region region;
     Node *grid;
     vector<Node*> active;
@@ -67,17 +72,25 @@ public:
             regions[i] = new Region(grid, lowBound, highBound, lowBoundS, highBoundS, gSizeY_2, gSizeZ_2, cmul);
         }
         
+        for (int i = 0; i < nGWorkers; i++) {
+            gridWorkers[i] = new GridWorker(active);
+        }
+        
         threadpool = new ThreadPool();
     }
     
     void AddParticle(float x, float y, float z) {
         for (int i = 0; i < 20; i++) {
-            for (int j = 0; j < 70; j++) {
-                for (int k = 0; k < 240; k++) {
+            for (int j = 0; j < 40; j++) {
+                for (int k = 0; k < 125; k++) {
                     particles.push_back(Particle(x+i*.5, y+j*.5, z+k*.5));
                 }
             }
         }
+    }
+    
+    void threadedFunction() {
+        Update();
     }
     
     void Update() {
@@ -95,13 +108,24 @@ public:
             regions[region]->particles.push_back(&p);
         }
         
+        
         for (int i = 0; i < active.size(); i++) {
             Node &n = *active[i];
             n.m = 0;
             n.a.setZero();
             n.gx.setZero();
         }
-
+        /*
+        int block = active.size()/nGWorkers;
+        for (int i = 0; i < nGWorkers; i++) {
+            gridWorkers[i]->action = 0;
+            gridWorkers[i]->active = active;
+            gridWorkers[i]->start = i*block;
+            gridWorkers[i]->end = i == nGWorkers-1 ? active.size() : (i+1)*block;
+            threadpool->start(*gridWorkers[i]);
+        }
+        threadpool->joinAll();
+        */
         active.clear();
         
         // Add particle mass to grid
@@ -158,6 +182,7 @@ public:
             }
         }
         
+        // Advance Particles
         for (int i = 0; i < nRegions; i++) {
             regions[i]->currentFunction = 3;
             threadpool->start(*regions[i]);

@@ -2,25 +2,25 @@
 
 //--------------------------------------------------------------
 void testApp::setup(){
-    simulator = Simulator(23, 40, 125);
-    simulator.AddParticle(5.5, 5.5, 5.5);
+    simulator = new Simulator(23, 40, 125);
+    simulator->AddParticle(5.5, 5.5, 5.5);
     
     glEnable(GL_DEPTH_TEST);
 }
 
 //--------------------------------------------------------------
 void testApp::update(){
-    simulator.Update();
 }
 
 //--------------------------------------------------------------
 void testApp::draw(){
+    simulator->startThread();
     ofBackground(0);
-    ofScale(10, 10);
+    ofScale(15, 15);
     
     glBegin(GL_POINTS);
-    for (int i = 0; i < simulator.particles.size(); i++) {
-        Particle& p = simulator.particles[i];
+    for (int i = 0; i < simulator->particles.size(); i++) {
+        Particle& p = simulator->particles[i];
         float v = fminf(1, p.u.norm()*1.5);
         glColor3f(v, .6+.4*v, 1);
         float *x = p.x.data();
@@ -31,6 +31,7 @@ void testApp::draw(){
     
     ofColor(255);
     ofDrawBitmapString(ofToString(ofGetFrameRate()), 10, 10);
+    simulator->waitForThread(false);
 }
 
 //--------------------------------------------------------------

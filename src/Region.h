@@ -232,7 +232,7 @@ struct Region : public Poco::Runnable {
             }
             
             p.x += gu;
-            p.u += 1*(gu-p.u);
+            p.u += .5*(gu-p.u);
             
             auto comparisonl = (p.x.array() < lowBound.array());
             if (comparisonl.any()) {

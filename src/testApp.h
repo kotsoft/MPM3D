@@ -5,7 +5,7 @@
 #include "Simulator.h"
 
 class testApp : public ofBaseApp{
-    Simulator simulator;
+    Simulator *simulator;
     
 	public:
 		void setup();

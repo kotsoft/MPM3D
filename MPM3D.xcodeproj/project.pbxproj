@@ -61,6 +61,7 @@
 
 /* Begin PBXFileReference section */
 		9B654E71169FAB0A00474FD6 /* Region.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Region.h; sourceTree = "<group>"; };
+		9B9211BE169FE07900FC763F /* GridWorker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GridWorker.h; sourceTree = "<group>"; };
 		9BE1768F16985ED00075AD80 /* Particle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Particle.h; sourceTree = "<group>"; };
 		9BE1769016985F1D0075AD80 /* Simulator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Simulator.h; sourceTree = "<group>"; };
 		9BE176911698606F0075AD80 /* Node.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Node.h; sourceTree = "<group>"; };
@@ -195,6 +196,7 @@
 				9BE1769016985F1D0075AD80 /* Simulator.h */,
 				9BE176911698606F0075AD80 /* Node.h */,
 				9B654E71169FAB0A00474FD6 /* Region.h */,
+				9B9211BE169FE07900FC763F /* GridWorker.h */,
 			);
 			path = src;
 			sourceTree = SOURCE_ROOT;
