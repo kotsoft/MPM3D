@@ -16,7 +16,7 @@ void testApp::update(){
 //--------------------------------------------------------------
 void testApp::draw(){
     ofBackground(0);
-    ofScale(8, 8);
+    ofScale(10, 10);
     
     glBegin(GL_POINTS);
     for (int i = 0; i < simulator.particles.size(); i++) {

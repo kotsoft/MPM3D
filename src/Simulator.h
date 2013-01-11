@@ -15,9 +15,11 @@
 #include "Particle.h"
 #include "Node.h"
 #include "Region.h"
+#include <Poco/ThreadPool.h>
 
 using namespace Eigen;
 using namespace std;
+using namespace Poco;
 
 class Simulator {
     int gSizeX, gSizeY, gSizeZ, gSizeY_2, gSizeZ_2, gSize;
@@ -28,6 +30,8 @@ class Simulator {
     Vector4f lowBoundS;
     Vector4f highBoundS;
     Vector4f gravity;
+    
+    ThreadPool *threadpool;
 public:
     vector<Particle> particles;
     static const int nRegions = 16;
@@ -62,12 +66,14 @@ public:
         for (int i = 0; i < nRegions; i++) {
             regions[i] = new Region(grid, lowBound, highBound, lowBoundS, highBoundS, gSizeY_2, gSizeZ_2, cmul);
         }
+        
+        threadpool = new ThreadPool();
     }
     
     void AddParticle(float x, float y, float z) {
         for (int i = 0; i < 20; i++) {
-            for (int j = 0; j < 40; j++) {
-                for (int k = 0; k < 125; k++) {
+            for (int j = 0; j < 70; j++) {
+                for (int k = 0; k < 240; k++) {
                     particles.push_back(Particle(x+i*.5, y+j*.5, z+k*.5));
                 }
             }
@@ -101,34 +107,27 @@ public:
         // Add particle mass to grid
         for (int i = 0; i < nRegions/2; i++) {
             regions[i*2]->currentFunction = 0;
-            regions[i*2]->startThread();
+            threadpool->start(*regions[i*2]);
         }
-        for (int i = 0; i < nRegions/2; i++) {
-            regions[i*2]->waitForThread();
-        }
+        threadpool->joinAll();
+        
         for (int i = 0; i < nRegions/2; i++) {
             regions[i*2+1]->currentFunction = 0;
-            regions[i*2+1]->startThread();
+            threadpool->start(*regions[i*2+1]);
         }
-        for (int i = 0; i < nRegions/2; i++) {
-            regions[i*2+1]->waitForThread();
-        }
+        threadpool->joinAll();
         
         // Add forces to grid
         for (int i = 0; i < nRegions/2; i++) {
             regions[i*2]->currentFunction = 1;
-            regions[i*2]->startThread();
+            threadpool->start(*regions[i*2]);
         }
-        for (int i = 0; i < nRegions/2; i++) {
-            regions[i*2]->waitForThread();
-        }
+        threadpool->joinAll();
         for (int i = 0; i < nRegions/2; i++) {
             regions[i*2+1]->currentFunction = 1;
-            regions[i*2+1]->startThread();
+            threadpool->start(*regions[i*2+1]);
         }
-        for (int i = 0; i < nRegions/2; i++) {
-            regions[i*2+1]->waitForThread();
-        }
+        threadpool->joinAll();
         
         for (int i = 0; i < gSize; i++) {
             Node &n = grid[i];
@@ -143,18 +142,14 @@ public:
         // Particle velocities
         for (int i = 0; i < nRegions/2; i++) {
             regions[i*2]->currentFunction = 2;
-            regions[i*2]->startThread();
+            threadpool->start(*regions[i*2]);
         }
-        for (int i = 0; i < nRegions/2; i++) {
-            regions[i*2]->waitForThread();
-        }
+        threadpool->joinAll();
         for (int i = 0; i < nRegions/2; i++) {
             regions[i*2+1]->currentFunction = 2;
-            regions[i*2+1]->startThread();
+            threadpool->start(*regions[i*2+1]);
         }
-        for (int i = 0; i < nRegions/2; i++) {
-            regions[i*2+1]->waitForThread();
-        }
+        threadpool->joinAll();
         
         for (int i = 0; i < active.size(); i++) {
             Node &n = *active[i];
@@ -165,11 +160,9 @@ public:
         
         for (int i = 0; i < nRegions; i++) {
             regions[i]->currentFunction = 3;
-            regions[i]->startThread();
+            threadpool->start(*regions[i]);
         }
-        for (int i = 0; i < nRegions; i++) {
-            regions[i]->waitForThread();
-        }
+        threadpool->joinAll();
     }
 };
 

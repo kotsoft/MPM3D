@@ -9,7 +9,7 @@
 #ifndef MPM3D_Region_h
 #define MPM3D_Region_h
 
-struct Region : public ofThread {
+struct Region : public Poco::Runnable {
     vector<Particle*> particles;
     Node *grid;
     int gSizeY_2;
@@ -35,7 +35,7 @@ struct Region : public ofThread {
         }
     }
     
-    void threadedFunction() {
+    virtual void run() {
         switch (currentFunction) {
             case 0:
                 ParticlesToGrid1();
