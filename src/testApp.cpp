@@ -2,7 +2,7 @@
 
 //--------------------------------------------------------------
 void testApp::setup(){
-    simulator = Simulator(100, 100, 100);
+    simulator = Simulator(23, 90, 200);
     simulator.AddParticle(5.5, 5.5, 5.5);
     
     glEnable(GL_DEPTH_TEST);

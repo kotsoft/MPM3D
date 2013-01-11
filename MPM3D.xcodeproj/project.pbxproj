@@ -68,6 +68,7 @@
 /* Begin PBXFileReference section */
 		9B621287169F75D5000725AE /* libtbb.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libtbb.dylib; path = ../../../../tbb/lib/libtbb.dylib; sourceTree = "<group>"; };
 		9B621288169F75D5000725AE /* libtbbmalloc.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libtbbmalloc.dylib; path = ../../../../tbb/lib/libtbbmalloc.dylib; sourceTree = "<group>"; };
+		9B654E71169FAB0A00474FD6 /* Region.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Region.h; sourceTree = "<group>"; };
 		9BE1768F16985ED00075AD80 /* Particle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Particle.h; sourceTree = "<group>"; };
 		9BE1769016985F1D0075AD80 /* Simulator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Simulator.h; sourceTree = "<group>"; };
 		9BE176911698606F0075AD80 /* Node.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Node.h; sourceTree = "<group>"; };
@@ -205,6 +206,7 @@
 				9BE1768F16985ED00075AD80 /* Particle.h */,
 				9BE1769016985F1D0075AD80 /* Simulator.h */,
 				9BE176911698606F0075AD80 /* Node.h */,
+				9B654E71169FAB0A00474FD6 /* Region.h */,
 			);
 			path = src;
 			sourceTree = SOURCE_ROOT;

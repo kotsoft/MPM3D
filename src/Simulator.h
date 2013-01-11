@@ -15,12 +15,11 @@
 
 #include "Particle.h"
 #include "Node.h"
+#include "Region.h"
 
 using namespace Eigen;
 using namespace std;
 using namespace tbb;
-
-
 
 class Simulator {
     int gSizeX, gSizeY, gSizeZ, gSizeY_2, gSizeZ_2, gSize;
@@ -33,6 +32,8 @@ class Simulator {
     Vector4f gravity;
 public:
     vector<Particle> particles;
+    Region *regions[16];
+    //Region region;
     Node *grid;
     vector<Node*> active;
     
@@ -64,17 +65,19 @@ public:
         highBoundS = Vector4f(gSizeX-4, gSizeY-4, gSizeZ-4, 0);
         
         gravity = Vector4f(0, .01f, 0, 0);
+        
+        for (int i = 0; i < 16; i++) {
+            regions[i] = new Region(grid, lowBound, highBound, gSizeY_2, gSizeZ_2, cmul);
+        }
     }
     
     void AddParticle(float x, float y, float z) {
-        for (int l = 0; l < 10; l++) {
-        for (int i = 0; i < 100; i++) {
-            for (int j = 0; j < 180; j++) {
-                for (int k = 0; k < 2; k++) {
-                    particles.push_back(Particle(x+i*.5, y+j*.5, z+k*.5+l*10));
+        for (int i = 0; i < 20; i++) {
+            for (int j = 0; j < 90; j++) {
+                for (int k = 0; k < 200; k++) {
+                    particles.push_back(Particle(x+i*.5, y+j*.5, z+k*.5));
                 }
             }
-        }
         }
     }
     
@@ -101,61 +104,30 @@ public:
     public:
         void operator()(const blocked_range<int>& r) const {
             for (int i = r.begin(); i != r.end(); i++) {
-                Particle &p = particles[i];
                 
-                Vector4f gu = Vector4f::Zero();
-                Matrix4f L = Matrix4f::Zero();
-                
-                Vector4f *phiPtr = &p.phi[0];
-                float *wPtr = &p.w[0];
-                Node *nodePtr = &grid[p.c];
-                for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
-                    for (int y = 0; y < 2; y++, nodePtr += gSizeZ_2) {
-                        for (int z = 0; z < 2; z++, phiPtr++, wPtr++, nodePtr++) {
-                            Vector4f &phi = *phiPtr;
-                            Node &n = *nodePtr;
-                            
-                            gu += *wPtr * n.u;
-                            
-                            L += phi*n.u.transpose();
-                        }
-                    }
-                }
-                
-                Matrix4f LT = L.transpose();
-                //Matrix4f W = (L-LT)*.5f;
-                
-                p.stress = (L+LT)*.5f;
-                //p.strain += p.stress + p.strain*W - W*p.strain;
-                p.strain += p.stress;
-                float norm = p.strain.squaredNorm();
-                if (norm > 9) {
-                    norm = sqrtf(norm);
-                    p.strain -= .5*(norm-3)/norm*p.strain;
-                }
-                
-                p.x += gu;
-                p.u += 1*(gu-p.u);
-                
-                auto comparisonl = (p.x.array() < lowBound.array());
-                if (comparisonl.any()) {
-                    Vector4f compMul = comparisonl.cast<float>();
-                    p.x += compMul.cwiseProduct(lowBound-p.x+.001f*Vector4f::Random());
-                    p.u -= compMul.cwiseProduct(p.u);
-                }
-                auto comparisonh = (p.x.array() > highBound.array());
-                if (comparisonh.any()) {
-                    Vector4f compMul = comparisonh.cast<float>();
-                    p.x += compMul.cwiseProduct(highBound-p.x-.001f*Vector4f::Random());
-                    p.u -= compMul.cwiseProduct(p.u);
-                }
             }
         }
         AdvanceParticles(Node* grid, vector<Particle> &particles, int gSizeY_2, int gSizeZ_2, Vector4f lowBound, Vector4f highBound) : grid(grid), particles(particles), gSizeY_2(gSizeY_2), gSizeZ_2(gSizeZ_2), lowBound(lowBound), highBound(highBound) {}
     };
     
-    void Update() {
+    void AdvanceParticles() {
         
+    }
+    
+    void Update() {
+        for (int i = 0; i < 16; i++) {
+            regions[i]->particles.clear();
+        }
+        for (int i = 0; i < particles.size(); i++) {
+            Particle &p = particles[i];
+            int region = p.x[0]-3;
+            if (region < 0) {
+                region = 0;
+            } else if (region > 15) {
+                region = 15;
+            }
+            regions[region]->particles.push_back(&p);
+        }
         
         parallel_for(blocked_range<int>(0, active.size()), ClearGrid(active));
 
@@ -317,7 +289,14 @@ public:
             }
         }
         
-        parallel_for(blocked_range<int>(0, particles.size()), AdvanceParticles(grid, particles, gSizeY_2, gSizeZ_2, lowBound, highBound));
+        for (int i = 0; i < 16; i++) {
+            regions[i]->currentFunction = 3;
+            regions[i]->startThread();
+        }
+        for (int i = 0; i < 16; i++) {
+            regions[i]->waitForThread();
+        }
+        
         /*
         for (int i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
