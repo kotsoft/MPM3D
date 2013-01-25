@@ -7,6 +7,8 @@
 class testApp : public ofBaseApp{
     Simulator *simulator;
     
+    ofFbo pointsFBO;
+    
 	public:
 		void setup();
 		void update();

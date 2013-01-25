@@ -126,7 +126,7 @@ struct Region : public Poco::Runnable {
             normal.normalize();
             p.normal = normal;
             
-            float pressure = .125*(density-8);
+            float pressure = .25*(density-2);
             
             if (pressure > .5) {
                 pressure = .5;
@@ -148,14 +148,17 @@ struct Region : public Poco::Runnable {
             phiPtr = &p.phi[0];
             wPtr = &p.w[0];
             nodePtr = &grid[p.c];
+            
+            float stressTrace = .5*p.stress.trace();
+            
             for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
                 for (int y = 0; y < 2; y++, nodePtr += gSizeZ_2) {
                     for (int z = 0; z < 2; z++, phiPtr++, wPtr++, nodePtr++) {
                         Vector4f &phi = *phiPtr;
                         Node &n = *nodePtr;
                         
-                        n.a -= phi*pressure - *wPtr*wallforce;
-                        n.a -= .5*(p.strain)*phi;
+                        n.a -= phi*(pressure+stressTrace) - *wPtr*wallforce;
+                        //n.a -= .1*(p.stress)*phi;
                     }
                 }
             }
@@ -232,7 +235,7 @@ struct Region : public Poco::Runnable {
             }
             
             p.x += gu;
-            p.u += .5*(gu-p.u);
+            p.u += .1*(gu-p.u);
             
             auto comparisonl = (p.x.array() < lowBound.array());
             if (comparisonl.any()) {

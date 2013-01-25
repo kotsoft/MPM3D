@@ -81,8 +81,8 @@ public:
     
     void AddParticle(float x, float y, float z) {
         for (int i = 0; i < 20; i++) {
-            for (int j = 0; j < 40; j++) {
-                for (int k = 0; k < 125; k++) {
+            for (int j = 0; j < 100; j++) {
+                for (int k = 0; k < 120; k++) {
                     particles.push_back(Particle(x+i*.5, y+j*.5, z+k*.5));
                 }
             }
