@@ -5,8 +5,8 @@
 #include "Simulator.h"
 
 class testApp : public ofBaseApp{
-    Simulator simulator;
-    
+    Simulator *simulator;
+    int frameRates[100];
 	public:
 		void setup();
 		void update();

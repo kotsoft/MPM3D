@@ -11,14 +11,36 @@
 
 #include <Eigen>
 #include <vector>
+#include <Poco/ThreadPool.h>
 
 #include "Particle.h"
 #include "Node.h"
 
+#define NUM_THREADS 4
+
+using namespace Poco;
+
+class ClearGridCells : public Runnable {
+    Node *grid;
+    int start, end;
+public:
+    ClearGridCells(Node *grid, int start, int end) : grid(grid), start(start), end(end) {}
+    virtual void run() {
+        for (int i = start; i < end; i++) {
+            Node &n = grid[i];
+            if (n.m > 0) {
+                n.m = 0;
+                n.a.setZero();
+                n.gx.setZero();
+            }
+        }
+    }
+};
+
 using namespace Eigen;
 using namespace std;
 
-class Simulator {
+class Simulator : public ofThread {
     int gSizeX, gSizeY, gSizeZ, gSizeY_2, gSizeZ_2, gSize;
     Vector4i cmul;
     Vector4f dxSub[8];
@@ -27,6 +49,8 @@ class Simulator {
     Vector4f lowBoundS;
     Vector4f highBoundS;
     Vector4f gravity;
+    
+    ClearGridCells *clearGridCells[NUM_THREADS];
 public:
     vector<Particle> particles;
     Node *grid;
@@ -48,7 +72,7 @@ public:
         for (int x = 0; x < 2; x++) {
             for (int y = 0; y < 2; y++) {
                 for (int z = 0; z < 2; z++) {
-                    dxSub[x*4+y*2+z] = Vector4f(x, y, z, 0);
+                    dxSub[x*4+y*2+z] = Vector4f(x, y, z, -1);
                 }
             }
         }
@@ -58,7 +82,14 @@ public:
         lowBoundS = Vector4f(3.0f, 3.0f, 3.0f, 0.0f);
         highBoundS = Vector4f(gSizeX-4, gSizeY-4, gSizeZ-4, 0);
         
-        gravity = Vector4f(0, .05f, 0, 0);
+        gravity = Vector4f(0, .01f, 0, 0);
+        
+        int gSize_8 = gSize/NUM_THREADS;
+        for (int i = 0; i < NUM_THREADS; i++) {
+            int start = i*gSize_8;
+            int end = i < (NUM_THREADS-1) ? (i+1)*gSize_8 : gSize;
+            clearGridCells[i] = new ClearGridCells(grid, start, end);
+        }
     }
     
     void AddParticle(float x, float y, float z) {
@@ -69,10 +100,13 @@ public:
                 }
             }
         }
-        
     }
     
+    void threadedFunction() {
+        Update();
+    }
     void Update() {
+        /*
         for (int i = 0; i < gSize; i++) {
             Node &n = grid[i];
             if (n.m > 0) {
@@ -80,7 +114,12 @@ public:
                 n.a.setZero();
                 n.gx.setZero();
             }
+        }*/
+        
+        for (int i = 0; i < NUM_THREADS; i++) {
+            ThreadPool::defaultPool().start(*clearGridCells[i]);
         }
+        ThreadPool::defaultPool().joinAll();
         
         Vector4f u[2], v[2], w[2], splat;
         for (int i = 0; i < particles.size(); i++) {
@@ -117,11 +156,9 @@ public:
                         Vector4f &phi = *phiPtr = u[x].cwiseProduct(v[y].cwiseProduct(w[z]));
                         Node &n = *nodePtr;
                         
-                        float &ws = *wPtr = phi.w();
-                        phi.w() = 0;
-                        
-                        n.m += ws;
+                        *wPtr = phi.w();
                         n.gx += phi;
+                        phi.w() = 0;
                     }
                 }
             }
@@ -142,12 +179,12 @@ public:
                         Vector4f &phi = *phiPtr;
                         Node &n = *nodePtr;
                         
-                        density += *wPtr * (n.m+n.gx.dot(p.dx - *dxPtr));
+                        density += *wPtr * (n.gx.dot(p.dx - *dxPtr));
                     }
                 }
             }
             
-            float pressure = .125*(density-8);
+            float pressure = .25*(density-2);
             
             if (pressure > .5) {
                 pressure = .5;
@@ -169,15 +206,17 @@ public:
             phiPtr = &p.phi[0];
             wPtr = &p.w[0];
             nodePtr = &grid[p.c];
+            
+            Matrix4f elasticForce = p.strain*0+p.stress*.1;
+            pressure -= elasticForce.trace()/3-.5*p.stress.trace()/3;
+            
             for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
                 for (int y = 0; y < 2; y++, nodePtr += gSizeZ_2) {
                     for (int z = 0; z < 2; z++, phiPtr++, wPtr++, nodePtr++) {
                         Vector4f &phi = *phiPtr;
                         Node &n = *nodePtr;
                         
-                        n.a -= phi*pressure - *wPtr*wallforce;
-                        Vector4f F = p.strain.transpose()*phi;
-                        n.a -= .1*F;
+                        n.a -= phi*pressure - *wPtr*wallforce + elasticForce*phi;
                     }
                 }
             }
@@ -185,6 +224,7 @@ public:
         
         for (int i = 0; i < gSize; i++) {
             Node &n = grid[i];
+            n.m = n.gx.w();
             if (n.m > 0) {
                 n.a = n.a/n.m + gravity;
                 n.u.setZero();
@@ -252,19 +292,19 @@ public:
                 }
             }
             
-            Matrix4f LT = L.transpose();
-            Matrix4f W = (L-LT)*.5f;
             
-            p.stress = (L+LT)*.5f;
-            p.strain += p.stress + p.strain*W - W*p.strain;
+            
+            Matrix4f LT = L.transpose();
+            
+            p.strain += p.stress = (L+L.transpose())*.5f;
             float norm = p.strain.squaredNorm();
-            if (norm > 9) {
+            if (norm > 1) {
                 norm = sqrtf(norm);
-                p.strain -= .5*(norm-3)/norm*p.strain;
+                p.strain -= .5*(norm-1)/norm*p.strain;
             }
             
             p.x += gu;
-            p.u += 1*(gu-p.u);
+            p.u += .1*(gu-p.u);
             
             auto comparisonl = (p.x.array() < lowBound.array());
             if (comparisonl.any()) {

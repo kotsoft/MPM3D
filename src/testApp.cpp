@@ -2,36 +2,42 @@
 
 //--------------------------------------------------------------
 void testApp::setup(){
-    simulator = Simulator(125, 40, 20);
-    simulator.AddParticle(5.5, 5.5, 5.5);
+    simulator = new Simulator(125, 40, 20);
+    simulator->AddParticle(5.5, 5.5, 5.5);
     
     glEnable(GL_DEPTH_TEST);
 }
 
 //--------------------------------------------------------------
 void testApp::update(){
-    simulator.Update();
 }
 
 //--------------------------------------------------------------
 void testApp::draw(){
+    simulator->startThread();
     ofBackground(0);
-    ofScale(8, 8);
     
+    ofScale(8, 8);
     glBegin(GL_LINES);
-    for (int i = 0; i < simulator.particles.size(); i++) {
-        Particle& p = simulator.particles[i];
+    for (int i = 0; i < simulator->particles.size(); i++) {
+        Particle& p = simulator->particles[i];
         float v = fminf(1, p.u.norm()*1.5);
-        glColor3f(v,.6+v*.4,1);
         float *x = p.x.data();
         float *x2 = Vector4f(p.x-p.u).data();
+        glColor3f(v,.6+v*.4,1);
         glVertex3f(x[0], x[1], x[2]/20);
         glVertex3f(x2[0], x2[1], x2[2]/20);
     }
     glEnd();
+    ofScale(1.0/8, 1.0/8);
     
     ofColor(255);
-    ofDrawBitmapString(ofToString(ofGetFrameRate()), 10, 10);
+    
+    frameRates[ofGetFrameNum()/100] = ofGetFrameRate();
+    for (int i = 0; i < ofGetFrameNum()/100; i++) {
+        ofDrawBitmapString(ofToString(frameRates[i]), 10+i*50, 10);
+    }
+    simulator->waitForThread();
 }
 
 //--------------------------------------------------------------
