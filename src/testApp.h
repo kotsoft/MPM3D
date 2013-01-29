@@ -7,6 +7,7 @@
 class testApp : public ofBaseApp{
     Simulator *simulator;
     int frameRates[100];
+    
 	public:
 		void setup();
 		void update();

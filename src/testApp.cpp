@@ -2,9 +2,10 @@
 
 //--------------------------------------------------------------
 void testApp::setup(){
-    simulator = new Simulator(125, 40, 20);
+    simulator = new Simulator(150, 100, 60);
     simulator->AddParticle(5.5, 5.5, 5.5);
     
+    glDepthFunc(GL_LESS);
     glEnable(GL_DEPTH_TEST);
 }
 
@@ -15,18 +16,32 @@ void testApp::update(){
 //--------------------------------------------------------------
 void testApp::draw(){
     simulator->startThread();
-    ofBackground(0);
-    
+    /*
+    ofFile obj;
+    if (obj.open(ofToDataPath("pointcloud"+ ofToString(ofGetFrameNum())+".obj"), ofFile::WriteOnly)) {
+        for (int i = 0; i < simulator->particles.size(); i++) {
+            Particle& p = simulator->particles[i];
+            float *x = p.x.data();
+            obj << "v " << x[0] << " " << x[1] << " " << x[2] << endl;
+        }
+    }
+    obj.close();
+    */
+    ofClear(0);
     ofScale(8, 8);
-    glBegin(GL_LINES);
+    glBegin(GL_POINTS);
     for (int i = 0; i < simulator->particles.size(); i++) {
         Particle& p = simulator->particles[i];
         float v = fminf(1, p.u.norm()*1.5);
         float *x = p.x.data();
-        float *x2 = Vector4f(p.x-p.u).data();
-        glColor3f(v,.6+v*.4,1);
-        glVertex3f(x[0], x[1], x[2]/20);
-        glVertex3f(x2[0], x2[1], x2[2]/20);
+        //float *n = p.normal.data();
+        
+        //glColor3f(v*x[2]/20,(.6+v*.4)*x[2]/20,1*x[2]/20);
+        float brightness = 1-(x[2]/160);
+        glColor3f(v*brightness,(.6+v*.4)*brightness,1*brightness);
+        glVertex3f(x[0], x[1], 1-x[2]/80);
+        
+        
     }
     glEnd();
     ofScale(1.0/8, 1.0/8);

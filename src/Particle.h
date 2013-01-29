@@ -16,17 +16,23 @@ struct Particle {
     Vector4f u;
     Vector4f phi[8];
     Vector4f dx;
+    //Vector4f normal;
     Matrix4f stress;
     Matrix4f strain;
+    
     float w[8];
     int c;
     Particle() {
         x << 0,0,0,0;
         u << 0,0,0,0;
+        stress = Matrix4f::Zero();
+        strain = Matrix4f::Zero();
     }
     Particle(float x0, float y0, float z0) {
         x << x0,y0,z0,0;
         u << 0,0,0,0;
+        stress = Matrix4f::Zero();
+        strain = Matrix4f::Zero();
     }
 };
 

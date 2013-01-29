@@ -16,7 +16,7 @@
 #include "Particle.h"
 #include "Node.h"
 
-#define NUM_THREADS 4
+#define NUM_THREADS 8
 
 using namespace Poco;
 
@@ -37,6 +37,64 @@ public:
     }
 };
 
+class AccelerateGridCells : public Runnable {
+    Node *grid;
+    int start, end;
+    Vector4f gravity;
+public:
+    AccelerateGridCells(Node *grid, int start, int end, Vector4f gravity) : grid(grid), start(start), end(end), gravity(gravity) {}
+    virtual void run() {
+        for (int i = start; i < end; i++) {
+            Node &n = grid[i];
+            n.m = n.gx.w();
+            if (n.m > 0) {
+                n.a = n.a/n.m + gravity;
+                n.u.setZero();
+            }
+        }
+    }
+};
+
+class VelocityGridCells : public Runnable {
+    Node *grid;
+    int start, end;
+public:
+    VelocityGridCells(Node *grid, int start, int end) : grid(grid), start(start), end(end) {}
+    virtual void run() {
+        for (int i = start; i < end; i++) {
+            Node &n = grid[i];
+            if (n.m > 0) {
+                n.u /= n.m;
+            }
+        }
+    }
+};
+
+class ParticlePartitioner : public Runnable{
+    vector<Particle> *particles;
+    vector<Particle*> regions[NUM_THREADS*2];
+public:
+    ParticlePartitioner(vector<Particle> *particles) : particles(particles) {}
+    virtual void run() {
+        for (int i = 0; i < NUM_THREADS*2; i++) {
+            regions[i].clear();
+        }
+        for (int i = 0; i < particles->size(); i++) {
+            int region = (float)rand()/RAND_MAX*NUM_THREADS*2;
+            regions[region].push_back(&(*particles)[i]);
+        }
+    }
+};
+
+class ParticleGroup {
+    vector<Particle*> particles;
+    vector<int> leaveRight;
+    vector<int> leaveLeft;
+    float center, left, right;
+public:
+    
+};
+
 using namespace Eigen;
 using namespace std;
 
@@ -51,6 +109,13 @@ class Simulator : public ofThread {
     Vector4f gravity;
     
     ClearGridCells *clearGridCells[NUM_THREADS];
+    AccelerateGridCells *accelerateGridCells[NUM_THREADS];
+    VelocityGridCells *velocityGridCells[NUM_THREADS];
+    
+    ParticleGroup particleGroups[NUM_THREADS*2];
+    
+    Thread partitionerThread;
+    ParticlePartitioner *particlePartitioner;
 public:
     vector<Particle> particles;
     Node *grid;
@@ -82,21 +147,46 @@ public:
         lowBoundS = Vector4f(3.0f, 3.0f, 3.0f, 0.0f);
         highBoundS = Vector4f(gSizeX-4, gSizeY-4, gSizeZ-4, 0);
         
-        gravity = Vector4f(0, .01f, 0, 0);
+        gravity = Vector4f(0, .03f, 0, 0);
         
-        int gSize_8 = gSize/NUM_THREADS;
+        int gChunk = gSize/NUM_THREADS;
         for (int i = 0; i < NUM_THREADS; i++) {
-            int start = i*gSize_8;
-            int end = i < (NUM_THREADS-1) ? (i+1)*gSize_8 : gSize;
+            int start = i*gChunk;
+            int end = i < (NUM_THREADS-1) ? (i+1)*gChunk : gSize;
             clearGridCells[i] = new ClearGridCells(grid, start, end);
+            accelerateGridCells[i] = new AccelerateGridCells(grid, start, end, gravity);
+            velocityGridCells[i] = new VelocityGridCells(grid, start, end);
         }
+        
+        particlePartitioner = new ParticlePartitioner(&particles);
     }
     
     void AddParticle(float x, float y, float z) {
-        for (int i = 0; i < 125; i++) {
-            for (int j = 0; j < 40; j++) {
-                for (int k = 0; k < 20; k++) {
+        for (int i = 0; i < 20; i++) {
+            for (int j = 0; j < 160; j++) {
+                for (int k = 0; k < 80; k++) {
                     particles.push_back(Particle(x+i*.5, y+j*.5, z+k*.5));
+                }
+            }
+        }
+        for (int i = 0; i < 160; i++) {
+            for (int j = 0; j < 20; j++) {
+                for (int k = 0; k < 80; k++) {
+                    particles.push_back(Particle(x+i*.5+10, y+j*.5, z+k*.5));
+                }
+            }
+        }
+        for (int i = 0; i < 20; i++) {
+            for (int j = 0; j < 160; j++) {
+                for (int k = 0; k < 80; k++) {
+                    particles.push_back(Particle(x+i*.5+90, y+j*.5, z+k*.5));
+                }
+            }
+        }
+        for (int i = 0; i < 20; i++) {
+            for (int j = 0; j < 140; j++) {
+                for (int k = 0; k < 80; k++) {
+                    particles.push_back(Particle(x+i*.5+45, y+j*.5+10, z+k*.5));
                 }
             }
         }
@@ -105,16 +195,9 @@ public:
     void threadedFunction() {
         Update();
     }
+    
     void Update() {
-        /*
-        for (int i = 0; i < gSize; i++) {
-            Node &n = grid[i];
-            if (n.m > 0) {
-                n.m = 0;
-                n.a.setZero();
-                n.gx.setZero();
-            }
-        }*/
+        //partitionerThread.start(*particlePartitioner);
         
         for (int i = 0; i < NUM_THREADS; i++) {
             ThreadPool::defaultPool().start(*clearGridCells[i]);
@@ -168,6 +251,7 @@ public:
             Particle &p = particles[i];
             
             float density = 0;
+            //Vector4f normal = Vector4f::Zero();
             
             Vector4f *phiPtr = &p.phi[0];
             float *wPtr = &p.w[0];
@@ -180,11 +264,15 @@ public:
                         Node &n = *nodePtr;
                         
                         density += *wPtr * (n.gx.dot(p.dx - *dxPtr));
+                        //normal += *wPtr * n.gx;
                     }
                 }
             }
             
-            float pressure = .25*(density-2);
+            //normal.w() = 0;
+            //p.normal = normal.normalized();
+            
+            float pressure = .0625*(density-8);
             
             if (pressure > .5) {
                 pressure = .5;
@@ -207,7 +295,7 @@ public:
             wPtr = &p.w[0];
             nodePtr = &grid[p.c];
             
-            Matrix4f elasticForce = p.strain*0+p.stress*.1;
+            Matrix4f elasticForce = p.strain*.5+p.stress*.1;
             pressure -= elasticForce.trace()/3-.5*p.stress.trace()/3;
             
             for (int x = 0; x < 2; x++, nodePtr += gSizeY_2) {
@@ -222,14 +310,10 @@ public:
             }
         }
         
-        for (int i = 0; i < gSize; i++) {
-            Node &n = grid[i];
-            n.m = n.gx.w();
-            if (n.m > 0) {
-                n.a = n.a/n.m + gravity;
-                n.u.setZero();
-            }
+        for (int i = 0; i < NUM_THREADS; i++) {
+            ThreadPool::defaultPool().start(*accelerateGridCells[i]);
         }
+        ThreadPool::defaultPool().joinAll();
         
         for (int i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
@@ -263,12 +347,10 @@ public:
             }
         }
         
-        for (int i = 0; i < gSize; i++) {
-            Node &n = grid[i];
-            if (n.m > 0) {
-                n.u /= n.m;
-            }
+        for (int i = 0; i < NUM_THREADS; i++) {
+            ThreadPool::defaultPool().start(*velocityGridCells[i]);
         }
+        ThreadPool::defaultPool().joinAll();
         
         for (int i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
@@ -292,19 +374,15 @@ public:
                 }
             }
             
-            
-            
-            Matrix4f LT = L.transpose();
-            
             p.strain += p.stress = (L+L.transpose())*.5f;
             float norm = p.strain.squaredNorm();
             if (norm > 1) {
                 norm = sqrtf(norm);
-                p.strain -= .5*(norm-1)/norm*p.strain;
+                p.strain -= 1*(norm-1)/norm*p.strain;
             }
             
             p.x += gu;
-            p.u += .1*(gu-p.u);
+            p.u += 1*(gu-p.u);
             
             auto comparisonl = (p.x.array() < lowBound.array());
             if (comparisonl.any()) {
@@ -319,6 +397,7 @@ public:
                 p.u -= compMul.cwiseProduct(p.u);
             }
         }
+        //partitionerThread.join();
     }
 };
 
